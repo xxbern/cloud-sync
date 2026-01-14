@@ -1,0 +1,13 @@
+
+{
+  "name": "cloudsync-pro",
+  "version": "1.0.0",
+  "description": "Chrome Sync Extension",
+  "scripts": {
+    "build": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "fs-extra": "^11.2.0"
+  }
+}

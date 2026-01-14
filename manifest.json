@@ -1,0 +1,33 @@
+
+{
+  "manifest_version": 3,
+  "name": "CloudSync Pro",
+  "version": "1.0.0",
+  "description": "Synchronize bookmarks, extensions, and history to Gist or WebDAV.",
+  "permissions": [
+    "bookmarks",
+    "history",
+    "management",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "*://*/*"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' https://esm.sh; object-src 'self';"
+  }
+}
