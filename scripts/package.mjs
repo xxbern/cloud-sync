@@ -8,13 +8,11 @@ const isDev = process.argv.includes('--dev');
 async function build() {
   const distDir = path.resolve(process.cwd(), 'dist');
   
-  // 1. 清理旧目录
   console.log('🧹 Cleaning dist directory...');
   await fs.remove(distDir);
   await fs.ensureDir(distDir);
 
-  // 2. 使用 esbuild 编译 TSX
-  console.log('🚀 Bundling scripts...');
+  console.log('🚀 Bundling scripts (Full Local Bundle)...');
   await esbuild.build({
     entryPoints: ['index.tsx'],
     bundle: true,
@@ -22,33 +20,33 @@ async function build() {
     format: 'esm',
     minify: !isDev,
     sourcemap: isDev,
-    // 将远程外部依赖排除，保持 index.html 中的 importmap 有效
-    external: ['react', 'react-dom', '@google/genai'],
+    // 移除 external，确保 react, react-dom, gemini 等都被打入 index.js
+    external: [], 
+    define: {
+      'process.env.NODE_ENV': isDev ? '"development"' : '"production"',
+      'process.env.API_KEY': '""' // 实际使用时通过环境变量注入或代码替换
+    },
     loader: {
       '.tsx': 'tsx',
       '.ts': 'ts'
     }
   });
 
-  // 3. 复制 HTML 并修改脚本引用
-  console.log('📄 Copying assets...');
+  console.log('📄 Processing HTML...');
   let html = await fs.readFile('index.html', 'utf8');
-  // 将 index.tsx 替换为编译后的 index.js
+  // 移除远程 CDN 脚本
+  html = html.replace(/<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>/, '');
+  // 移除 importmap
+  html = html.replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
+  // 确保引用本地打包后的 JS
   html = html.replace('index.tsx', 'index.js');
+  
   await fs.writeFile(path.join(distDir, 'index.html'), html);
 
-  // 4. 复制 Manifest
+  console.log('📝 Copying Manifest...');
   await fs.copy('manifest.json', path.join(distDir, 'manifest.json'));
 
-  // 5. 如果有图标，复制图标（这里简单处理，没有则忽略）
-  const icons = ['icon16.png', 'icon48.png', 'icon128.png'];
-  for (const icon of icons) {
-    if (await fs.pathExists(icon)) {
-      await fs.copy(icon, path.join(distDir, icon));
-    }
-  }
-
-  console.log('✅ Build complete! Load the "dist" folder into Chrome.');
+  console.log('✅ Build complete! Please run "npm install" before building.');
 }
 
 build().catch((err) => {

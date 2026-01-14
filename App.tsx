@@ -28,6 +28,10 @@ const App: React.FC = () => {
       const saved = await loadConfigFromLocal();
       if (saved) {
         setState(prev => ({ ...prev, config: { ...prev.config, ...saved } }));
+      } else {
+        // 如果没有保存的配置，引导用户去设置页面
+        setActiveTab('settings');
+        addLog('Welcome! Please configure your sync settings first.', 'info');
       }
     };
     init();
@@ -44,6 +48,19 @@ const App: React.FC = () => {
 
   const performUpload = async () => {
     if (state.isSyncing) return;
+    
+    // 基础校验
+    if (state.config.provider === StorageProvider.GIST && !state.config.gistToken) {
+      addLog('Error: Gist Token is missing. Go to Settings.', 'error');
+      setActiveTab('settings');
+      return;
+    }
+    if (state.config.provider === StorageProvider.WEBDAV && !state.config.webdavUrl) {
+      addLog('Error: WebDAV URL is missing. Go to Settings.', 'error');
+      setActiveTab('settings');
+      return;
+    }
+
     setState(prev => ({ ...prev, isSyncing: true }));
     addLog('Initiating manual upload...', 'info');
 
@@ -91,11 +108,8 @@ const App: React.FC = () => {
       const provider = getProvider(state.config.provider);
       const data = await provider.download(state.config);
       
-      addLog(`Download successful! Version: ${data.version}, Last Cloud Update: ${new Date(data.lastUpdated).toLocaleString()}`, 'success');
-      addLog(`Data fetched: ${data.bookmarks?.length || 0} bookmarks, ${data.extensions?.length || 0} extensions, ${data.history?.length || 0} history items.`, 'info');
-      
-      // In a real extension, you'd trigger a restoration flow here.
-      addLog('Ready to restore. (Auto-restore skipped for safety in this demo).', 'info');
+      addLog(`Download successful! Last Update: ${new Date(data.lastUpdated).toLocaleString()}`, 'success');
+      addLog('Ready to restore. (Auto-restore skipped for safety).', 'info');
     } catch (error: any) {
       addLog(`Download failed: ${error.message}`, 'error');
     } finally {
@@ -128,7 +142,7 @@ const App: React.FC = () => {
                     : 'border-blue-600 text-blue-600 hover:bg-blue-50 active:scale-95'
                 }`}
               >
-                Restore (Download)
+                Restore
               </button>
               <button
                 onClick={performUpload}
@@ -139,7 +153,7 @@ const App: React.FC = () => {
                     : 'bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-blue-200'
                 }`}
               >
-                {state.isSyncing ? 'Processing...' : 'Sync Now (Upload)'}
+                {state.isSyncing ? 'Processing...' : 'Sync Now'}
               </button>
             </div>
           </header>
@@ -148,9 +162,7 @@ const App: React.FC = () => {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <span className="text-2xl mb-2 block">📡</span>
               <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Status</h3>
-              <p className="text-xl font-bold text-slate-800 mt-1">
-                {state.isSyncing ? 'In Progress' : 'Idle'}
-              </p>
+              <p className="text-xl font-bold text-slate-800 mt-1">{state.isSyncing ? 'In Progress' : 'Idle'}</p>
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <span className="text-2xl mb-2 block">☁️</span>
@@ -159,29 +171,16 @@ const App: React.FC = () => {
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <span className="text-2xl mb-2 block">📅</span>
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Last Activity</h3>
-              <p className="text-xl font-bold text-slate-800 mt-1">{state.lastSyncTime || 'No history'}</p>
+              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Last Sync</h3>
+              <p className="text-xl font-bold text-slate-800 mt-1 truncate">{state.lastSyncTime || 'None'}</p>
             </div>
           </div>
 
-          {insights && (
-            <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-               <h3 className="text-lg font-bold mb-3 flex items-center gap-2">✨ Gemini AI Insights</h3>
-               <p className="text-indigo-100 leading-relaxed mb-4">{insights.summary}</p>
-               <div className="flex flex-wrap gap-2">
-                 {insights.recommendations.map((rec, i) => (
-                   <span key={i} className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium backdrop-blur-md">{rec}</span>
-                 ))}
-               </div>
-            </div>
-          )}
-
           <div className="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800">
-             <h3 className="text-slate-400 text-sm font-bold uppercase mb-4 tracking-widest">Real-time Activity Log</h3>
-             <div className="space-y-3 font-mono text-xs max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+             <h3 className="text-slate-400 text-sm font-bold uppercase mb-4 tracking-widest">Operation Log</h3>
+             <div className="space-y-3 font-mono text-[10px] max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                 {state.logs.length === 0 ? (
-                  <p className="text-slate-600 italic">Logs will appear here during sync...</p>
+                  <p className="text-slate-600 italic">No logs yet...</p>
                 ) : (
                   state.logs.map((log, i) => (
                     <div key={i} className={`flex gap-3 ${
@@ -199,113 +198,105 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-8">
+        <div className="space-y-8 p-4">
           <header>
-            <h2 className="text-2xl font-bold text-slate-800">Sync Configuration</h2>
-            <p className="text-slate-500">Manage your cloud credentials and targets</p>
+            <h2 className="text-2xl font-bold text-slate-800">Settings</h2>
+            <p className="text-slate-500">Enter your credentials below to enable cloud sync.</p>
           </header>
 
-          <section className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700">Select Provider</label>
+              <label className="text-sm font-bold text-slate-700">Storage Provider</label>
               <div className="flex gap-4">
                 {[StorageProvider.GIST, StorageProvider.WEBDAV].map(p => (
                   <button
                     key={p}
                     onClick={() => handleConfigChange({ provider: p })}
-                    className={`flex-1 py-4 rounded-xl border-2 transition-all font-bold ${
+                    className={`flex-1 py-3 rounded-xl border-2 transition-all font-bold ${
                       state.config.provider === p 
                         ? 'border-blue-600 bg-blue-50 text-blue-600' 
-                        : 'border-slate-100 text-slate-400 hover:border-slate-200'
+                        : 'border-slate-100 text-slate-400'
                     }`}
                   >
-                    {p === 'GIST' ? 'GitHub Gist' : 'WebDAV'}
+                    {p}
                   </button>
                 ))}
               </div>
             </div>
 
             {state.config.provider === StorageProvider.GIST ? (
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Personal Access Token</label>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">GitHub Token</label>
                   <input
                     type="password"
                     value={state.config.gistToken || ''}
                     onChange={(e) => handleConfigChange({ gistToken: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none"
                     placeholder="ghp_..."
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Existing Gist ID (Optional)</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">Gist ID (Optional)</label>
                   <input
                     type="text"
                     value={state.config.gistId || ''}
                     onChange={(e) => handleConfigChange({ gistId: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Leave empty to create new"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                    placeholder="Existing ID or leave blank"
                   />
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">WebDAV Endpoint URL</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">WebDAV URL</label>
                   <input
                     type="text"
                     value={state.config.webdavUrl || ''}
                     onChange={(e) => handleConfigChange({ webdavUrl: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="https://your-dav-server.com/remote.php/dav/"
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                    placeholder="https://..."
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Username</label>
-                    <input
-                      type="text"
-                      value={state.config.webdavUser || ''}
-                      onChange={(e) => handleConfigChange({ webdavUser: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Password / App Token</label>
-                    <input
-                      type="password"
-                      value={state.config.webdavPass || ''}
-                      onChange={(e) => handleConfigChange({ webdavPass: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Username"
+                    value={state.config.webdavUser || ''}
+                    onChange={(e) => handleConfigChange({ webdavUser: e.target.value })}
+                    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={state.config.webdavPass || ''}
+                    onChange={(e) => handleConfigChange({ webdavPass: e.target.value })}
+                    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                  />
                 </div>
               </div>
             )}
           </section>
 
-          <section className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
-            <h3 className="font-bold text-slate-800">Items to Synchronize</h3>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { key: 'syncBookmarks', label: 'Bookmarks', icon: '🔖' },
-                { key: 'syncExtensions', label: 'Extensions', icon: '🧩' },
-                { key: 'syncHistory', label: 'History', icon: '🕒' },
-              ].map(opt => (
-                <button
-                  key={opt.key}
-                  onClick={() => handleConfigChange({ [opt.key]: !state.config[opt.key as keyof SyncConfig] })}
-                  className={`flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all ${
-                    state.config[opt.key as keyof SyncConfig]
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-slate-100 text-slate-400 bg-slate-50'
-                  }`}
-                >
-                  <span className="text-3xl">{opt.icon}</span>
-                  <span className="font-bold">{opt.label}</span>
-                  <span className="text-xs">{state.config[opt.key as keyof SyncConfig] ? 'Enabled' : 'Disabled'}</span>
-                </button>
-              ))}
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <h3 className="font-bold text-slate-800">Sync Scope</h3>
+            <div className="flex gap-4">
+              {['Bookmarks', 'Extensions', 'History'].map(label => {
+                const key = `sync${label}` as keyof SyncConfig;
+                const active = !!state.config[key];
+                return (
+                  <button
+                    key={label}
+                    onClick={() => handleConfigChange({ [key]: !active })}
+                    className={`flex-1 py-2 rounded-lg border transition-all text-xs font-bold ${
+                      active ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-400 border-slate-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -319,19 +310,15 @@ const App: React.FC = () => {
 
 const HistoryView: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
-  useEffect(() => { getHistory(100).then(setItems); }, []);
-
+  useEffect(() => { getHistory(50).then(setItems); }, []);
   return (
-    <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-bold text-slate-800">Browsing History</h2>
-        <p className="text-slate-500">Snapshot of local history records</p>
-      </header>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
+    <div className="p-4 space-y-4">
+      <h2 className="text-xl font-bold">Local History</h2>
+      <div className="bg-white rounded-xl shadow-sm border divide-y overflow-hidden max-h-96 overflow-y-auto">
         {items.map((item, i) => (
-          <div key={i} className="p-4 hover:bg-slate-50 transition-colors">
-            <h4 className="font-medium text-slate-800 truncate">{item.title || 'Untitled'}</h4>
-            <p className="text-xs text-blue-500 truncate mt-1">{item.url}</p>
+          <div key={i} className="p-3 text-xs truncate">
+            <div className="font-bold text-slate-700">{item.title || 'Untitled'}</div>
+            <div className="text-blue-500 opacity-70">{item.url}</div>
           </div>
         ))}
       </div>
@@ -342,25 +329,15 @@ const HistoryView: React.FC = () => {
 const ExtensionsView: React.FC = () => {
   const [exts, setExts] = useState<any[]>([]);
   useEffect(() => { getExtensions().then(setExts); }, []);
-
   return (
-    <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-bold text-slate-800">Local Extensions</h2>
-        <p className="text-slate-500">Detected installed browser extensions</p>
-      </header>
-      <div className="grid grid-cols-2 gap-4">
+    <div className="p-4 space-y-4">
+      <h2 className="text-xl font-bold">Installed Extensions</h2>
+      <div className="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto">
         {exts.map((ext, i) => (
-          <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex gap-4">
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-2xl">🧩</div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-slate-800 truncate">{ext.name}</h4>
-              <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-tight">ID: {ext.id}</p>
-              <div className={`mt-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                ext.enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
-              }`}>
-                {ext.enabled ? 'Enabled' : 'Disabled'}
-              </div>
+          <div key={i} className="bg-white p-3 rounded-xl border flex justify-between items-center">
+            <div className="text-xs font-bold truncate pr-4">{ext.name}</div>
+            <div className={`text-[10px] px-2 py-0.5 rounded ${ext.enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100'}`}>
+              {ext.enabled ? 'ON' : 'OFF'}
             </div>
           </div>
         ))}

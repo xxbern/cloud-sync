@@ -3,11 +3,20 @@
   "name": "cloudsync-pro",
   "version": "1.0.0",
   "description": "Chrome Sync Extension",
+  "type": "module",
   "scripts": {
     "build": "node scripts/package.mjs"
   },
+  "dependencies": {
+    "@google/genai": "^1.35.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "devDependencies": {
     "esbuild": "^0.24.0",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
   }
 }
