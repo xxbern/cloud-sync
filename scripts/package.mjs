@@ -45,6 +45,7 @@ async function build() {
 
   console.log('📝 Copying Manifest...');
   await fs.copy('manifest.json', path.join(distDir, 'manifest.json'));
+  await fs.copy('img', path.join(distDir, 'img'))
 
   console.log('✅ Build complete! Please run "npm install" before building.');
 }
